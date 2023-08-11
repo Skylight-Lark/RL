@@ -1,20 +1,20 @@
 import torch
-from torch.cuda.amp import autocast, GradScaler
 from model import Qnet
 import numpy as np
 from torch import nn
+import utils
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 
 
 class DQN_agent():
     ''' DQN算法 '''
-    def __init__(self, state_channel, action_dim, gamma, learning_rate,
+    def __init__(self, state_dim, action_dim, gamma, learning_rate,
                  epsilon, target_update, device):
         self.action_dim = action_dim
-        self.q_net = Qnet(state_channel, self.action_dim).to(device)  # Q网络
-        self.target_q_net = Qnet(state_channel, self.action_dim).to(device) # 目标网络
-        self.criterion = nn.MSELoss().to(device)
+        self.q_net = Qnet(state_dim, self.action_dim).to(device)  # Q网络
+        self.target_q_net = Qnet(state_dim, self.action_dim).to(device) # 目标网络
+        self.criterion = nn.MSELoss()
         self.optimizer = torch.optim.Adam(self.q_net.parameters(),
                                           lr=learning_rate)
         self.gamma = gamma  # 折扣因子
@@ -22,7 +22,6 @@ class DQN_agent():
         self.target_update = target_update  # 目标网络更新频率
         self.count = 0  # 计数器,记录更新次数
         self.device = device
-        self.scaler = GradScaler()
         
     def decay_epsilon(self, episode, decay_rate=0.01):
         ''' 衰减epsilon，采取指数衰减函数'''
@@ -57,17 +56,14 @@ class DQN_agent():
         done_batch = torch.tensor(transition_dict['dones'],
                              dtype=torch.float).to(self.device)
 
-        # 混合精度训练
-        with autocast():
-            q_values = self.q_net(state_batch).gather(1, action_batch.unsqueeze(1))  # Q值
-            # 下个状态的最大Q值
-            max_next_q_values = self.target_q_net(next_state_batch).max(1)[0].detach()
-            target_q_values = reward_batch + self.gamma * max_next_q_values * (1 - done_batch)  # TD误差目标
-            loss = self.criterion(q_values, target_q_values.unsqueeze(1))
-        
-        self.scaler.scale(loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+        q_values = self.q_net(state_batch).gather(1, action_batch.unsqueeze(1))  # Q值
+        # 下个状态的最大Q值
+        max_next_q_values = self.target_q_net(next_state_batch).max(1)[0].detach()
+        target_q_values = reward_batch + self.gamma * max_next_q_values * (1 - done_batch)  # TD误差目标
+        loss = self.criterion(q_values, target_q_values.unsqueeze(1))
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
         if self.count % self.target_update == 0:
             self.target_q_net.load_state_dict(
@@ -90,7 +86,6 @@ class DQN_agent():
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
     def play(self, env, save_path=None):
-        ''' 使用训练好的模型玩一回合游戏'''
         fig, ax = plt.subplots()
         plt.axis('off')
 
@@ -106,11 +101,14 @@ class DQN_agent():
             ax.imshow(env.render())
             ax.set_title(f"Step: {i+1}")
         
-            action = self.take_action(state, mode='eval')
+            encoded_state = utils.encode_state(state)
+            action = self.take_action(encoded_state, mode='eval')
             next_state, _, terminated, truncated, _ = env.step(action)
+            encoded_next_state = utils.encode_state(next_state)
             done = terminated or truncated
             
             state = next_state
+            encoded_state = encoded_next_state
 
         state, _ = env.reset()
         done = False
