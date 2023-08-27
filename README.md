@@ -20,6 +20,9 @@
 |							 ├── model：保存anget参数，pth格式
 |							 ├── animation：验证的动画
 |   ├── Taxi-DQN.md：taxi环境下的训练说明文档
-
+|   ├── MDP.md：强化学习中的经典马尔可夫过程
+|   ├── DP.md：解决MDP问题的动态规划
+|   ├── model_free_prediction.md：无模型的预测，包括蒙特卡罗方法和时间差分方法
+|   ├── model_free_control.md：无模型的控制，包括蒙特卡罗方法和时间差分方法
 ```
 
