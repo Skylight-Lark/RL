@@ -5,6 +5,7 @@ import numpy as np
 from torch import nn
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
+import PIL as Image
 
 
 class DQN_agent():
@@ -89,34 +90,27 @@ class DQN_agent():
         self.target_q_net.load_state_dict(checkpoint['target_q_net'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         
-    def play(self, env, save_path=None):
+    def play(self, env, save_path=None, num):
         ''' 使用训练好的模型玩一回合游戏'''
-        fig, ax = plt.subplots()
-        plt.axis('off')
-
-        def animate(i):
-            nonlocal state, done
-            ax.clear()
-            ax.set_axis_off()
+        frames = []
+        state, _ = env.reset()
+        done = False
+        gif_file = save_path + f'play_{num}.gif'
             
-            if done:
-                animation.event_source.stop()
-                return
-            
-            ax.imshow(env.render())
-            ax.set_title(f"Step: {i+1}")
-        
+        while (not done):
+            img = env.render()
+            frame = Image.fromarray(img)
+            frames.append(frame)
             action = self.take_action(state, mode='eval')
             next_state, _, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
             
             state = next_state
 
-        state, _ = env.reset()
-        done = False
-        animation = FuncAnimation(fig, animate, frames=200, interval=500)
-
-        if save_path:
-            animation.save(save_path, writer='ffmpeg')  # 保存动画为文件
-        
-        return animation
+        frames[0].save(
+            gif_file,
+            save_all=True,
+            append_images=frames[1:],
+            duration=100, 
+            loop=0
+            )
